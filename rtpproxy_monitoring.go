@@ -1,10 +1,11 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"flag"
 	"log"
-	//"github.com/lemenkov/GoRTP/net/rtp"
+	mrand "math/rand"
 	"net"
 	"net/http"
 	"crypto/rand"
@@ -30,7 +31,17 @@ func init() {
 func viewHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("FROM: %s\n", r.RemoteAddr)
 	// TODO
-	fmt.Fprintf(w, "%s", "HELLO")
+	fmt.Fprintf(w, "%s", "<html lang=\"en\"><head></head><body><a href=\"https://www.google.com/\">HELLO</a></body>")
+}
+
+// Number of seconds ellapsed from 1900 to 1970, see RFC 5905
+const ntpEpochOffset = 2208988800
+
+func getNtpStamp() uint32 {
+	tm := time.Now().UnixNano()
+	seconds := uint32(tm/1e9 + ntpEpochOffset) // Go uses ns, thus divide by 1e9 to get seconds
+	msecs := (seconds % 1e6) * 8000 // 8 KHz
+	return msecs + uint32((tm % 1e9) / (1e6 / 8)) // 8 KHz
 }
 
 func getRandStr(n uint) string {
@@ -69,14 +80,29 @@ func main() {
 	// Buffer for the control connection (~1 MTU)
 	var buffer [1500]byte
 
-	var apayload []byte = make([]byte, payloadSize)
-	for i := range apayload {
-		apayload[i] = byte(i % 255)
+	const rtpHeader uint = 0x80
+	const rtpHeaderSize uint = 12
+
+	var apayload []byte = make([]byte, rtpHeaderSize + payloadSize)
+
+	aSSRC := mrand.Int31()
+
+	apayload[0] = byte(rtpHeader)
+	apayload[1] = byte(payloadType)
+	binary.BigEndian.PutUint32(apayload[8:], uint32(aSSRC))
+	for i := range apayload[rtpHeaderSize:] {
+		apayload[rtpHeaderSize + uint(i)] = byte(i % 255)
 	}
 
-	var bpayload []byte = make([]byte, payloadSize)
-	for i := range bpayload {
-		bpayload[i] = byte(255 - i % 255)
+	var bpayload []byte = make([]byte, rtpHeaderSize + payloadSize)
+
+	bSSRC := mrand.Int31()
+
+	bpayload[0] = byte(rtpHeader)
+	bpayload[1] = byte(payloadType)
+	binary.BigEndian.PutUint32(bpayload[8:], uint32(bSSRC))
+	for i := range bpayload[rtpHeaderSize:]  {
+		bpayload[rtpHeaderSize + uint(i)] = byte(255 - i % 255)
 	}
 
 	// Synchronizaion object
@@ -128,20 +154,33 @@ func main() {
 
 	// Run Bob's sender
 	go func() {
+		var sn uint16
+		var ts uint32
+		sn = 0
 		for {
-			// TODO
+			ts = getNtpStamp()
+			binary.BigEndian.PutUint16(bpayload[2:], sn)
+			binary.BigEndian.PutUint32(bpayload[4:], ts)
 			_, _ = bobCon.Write(bpayload)
 			time.Sleep(delay)
+			sn++
 		}
 		w.Done()
 	} ()
 
 	// Run Bob's receiver
 	go func() {
-		var recvbuf [1500]byte
+		var sn uint16
+		var curts uint32
+		var origts uint32
+		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
 		for {
-			// TODO
 			_, _ = bobCon.Read(recvbuf[0:])
+			curts = getNtpStamp()
+			sn = binary.BigEndian.Uint16(recvbuf[2:])
+			origts = binary.BigEndian.Uint32(recvbuf[4:])
+			// TODO
+			log.Printf("B: %d: %d samples\n", sn, curts - origts) // 8 KHz
 		}
 		w.Done()
 	} ()
@@ -174,20 +213,33 @@ func main() {
 
 	// Run Alice's sender
 	go func() {
+		var sn uint16
+		var ts uint32
+		sn = 0
 		for {
-			// TODO
+			ts = getNtpStamp()
+			binary.BigEndian.PutUint16(apayload[2:], sn)
+			binary.BigEndian.PutUint32(apayload[4:], ts)
 			_, _ = aliceCon.Write(apayload)
 			time.Sleep(delay)
+			sn++
 		}
 		w.Done()
 	} ()
 
 	// Run Alice's  receiver
 	go func() {
-		var recvbuf [1500]byte
+		var sn uint16
+		var curts uint32
+		var origts uint32
+		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
 		for {
-			// TODO
 			_, _ = aliceCon.Read(recvbuf[0:])
+			curts = getNtpStamp()
+			sn = binary.BigEndian.Uint16(recvbuf[2:])
+			origts = binary.BigEndian.Uint32(recvbuf[4:])
+			// TODO
+			log.Printf("A: %d: %d samples\n", sn, curts - origts) // 8 KHz
 		}
 		w.Done()
 	} ()
