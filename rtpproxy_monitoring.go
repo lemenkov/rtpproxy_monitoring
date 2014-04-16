@@ -14,24 +14,59 @@ import (
 	"time"
 )
 
+type RtpMsg struct {
+	sn uint16
+	delay uint32
+}
+
+type RtpStats struct {
+	unixtime int64
+	recv uint16
+	ooo uint16 // Out Of Order packets
+	delay uint32
+	last_sn uint16
+}
+
 var rtpproxyAddr string
 var rtpproxyPort uint
 var listenPort uint
 var payloadSize uint
 var payloadType uint
+var histSize uint
+var histTime uint
+var window *MovingWindow
+var currRtpStats RtpStats
 
 func init() {
 	flag.UintVar(&listenPort, "hport", 8080, "Port to run HTTP server at")
+	flag.UintVar(&histSize, "hsize", 10, "History backlog size (in steps)")
+	flag.UintVar(&histTime, "htime", 60, "History interval (in seconds)")
 	flag.StringVar(&rtpproxyAddr, "rhost", "127.0.0.1", "RTPproxy address")
 	flag.UintVar(&rtpproxyPort, "rport", 22222, "RTPproxy port")
 	flag.UintVar(&payloadSize, "psize", 160, "RTP payload size (in bytes)")
 	flag.UintVar(&payloadType, "ptype", 8, "RTP payload type")
 }
 
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("FROM: %s\n", r.RemoteAddr)
-	// TODO
-	fmt.Fprintf(w, "%s", "<html lang=\"en\"><head></head><body><a href=\"https://www.google.com/\">HELLO</a></body>")
+func viewHandlerRobo(w http.ResponseWriter, r *http.Request) {
+	log.Printf("ROBO FROM: %s REQ: %s\n", r.RemoteAddr, r.URL.Path)
+	fmt.Fprintf(w, "%s", "<html lang=\"en\"><head></head><body><a href=\"https://www.google.com/\">HELLO ROBOT</a></body>")
+}
+func viewHandlerHuman(w http.ResponseWriter, r *http.Request) {
+	log.Printf("FROM: %s REQ: %s\n", r.RemoteAddr, r.URL.Path)
+
+	var retStr string
+
+	retStr += "<html lang=\"en\"><head></head><body><table>"
+
+	for i := range window.arr {
+		retStr += fmt.Sprintf("<tr><td>%d</td><td>%d</td><td>%d</td><td>%d</td></tr>",
+		window.arr[i].unixtime,
+		window.arr[i].recv,
+		window.arr[i].ooo,
+		window.arr[i].delay)
+	}
+
+	fmt.Fprintf(w, "<html lang=\"en\"><head></head><body><table>%s</table></head></html>", retStr)
 }
 
 // Number of seconds ellapsed from 1900 to 1970, see RFC 5905
@@ -77,6 +112,11 @@ func main() {
 
 	var n int
 
+	window = New(int(histSize), 1)
+
+	ca := make(chan RtpMsg)
+	cb := make(chan RtpMsg)
+
 	// Buffer for the control connection (~1 MTU)
 	var buffer [1500]byte
 
@@ -108,13 +148,50 @@ func main() {
 	// Synchronizaion object
 	var w sync.WaitGroup
 
-	// Wait for 5 objects:
+	// Wait for the following objects
 	// - HTTP server
 	// - Alice's sender
 	// - Alice's receiver
 	// - Bob's sender
 	// - Bob's receiver
-	w.Add(5)
+	// - Stats recalculator
+	w.Add(6)
+
+	go func(in1 <-chan RtpMsg, in2 <-chan RtpMsg) {
+		var msg RtpMsg
+		var tm int64
+		for {
+			select {
+			case msg = <-in1:
+				// Alice's receiver
+				tm = time.Now().Unix()
+				if (tm >= currRtpStats.unixtime + int64(histTime)){
+					log.Printf("A RESET: %d: %d samples (%d time): %d %d %d %d %d\n", msg.sn, msg.delay, tm, currRtpStats.unixtime, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay, currRtpStats.last_sn) // 8 KHz
+					// Push it to the Window
+					window.PushBack(currRtpStats)
+					// ...and clean up
+					currRtpStats.unixtime = tm + int64(histTime)
+					currRtpStats.recv = 0
+					currRtpStats.ooo = 0
+					currRtpStats.delay = 0
+				}
+
+				//log.Printf("A: %d: %d samples (%d time)\n", msg.sn, msg.delay, tm) // 8 KHz
+				// Append stats
+				if(msg.sn > currRtpStats.last_sn) {
+					currRtpStats.recv++
+					currRtpStats.delay += msg.delay
+					currRtpStats.ooo += (msg.sn - (currRtpStats.last_sn + 1))
+					currRtpStats.last_sn = msg.sn
+				}
+
+			case msg = <-in2:
+				// Bob's receiver
+				//log.Printf("B: %d: %d samples\n", msg.sn, msg.delay) // 8 KHz
+			}
+		}
+		w.Done()
+	} (ca, cb)
 
 	// Open control connection
 	rtpproxyCon := makeCon("RTPproxy", rtpproxyAddr, fmt.Sprintf("%d", rtpproxyPort))
@@ -170,17 +247,13 @@ func main() {
 
 	// Run Bob's receiver
 	go func() {
-		var sn uint16
-		var curts uint32
-		var origts uint32
 		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
+		msg := RtpMsg{}
 		for {
 			_, _ = bobCon.Read(recvbuf[0:])
-			curts = getNtpStamp()
-			sn = binary.BigEndian.Uint16(recvbuf[2:])
-			origts = binary.BigEndian.Uint32(recvbuf[4:])
-			// TODO
-			log.Printf("B: %d: %d samples\n", sn, curts - origts) // 8 KHz
+			msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
+			msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
+			cb <- msg
 		}
 		w.Done()
 	} ()
@@ -229,24 +302,21 @@ func main() {
 
 	// Run Alice's  receiver
 	go func() {
-		var sn uint16
-		var curts uint32
-		var origts uint32
 		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
+		msg := RtpMsg{}
 		for {
 			_, _ = aliceCon.Read(recvbuf[0:])
-			curts = getNtpStamp()
-			sn = binary.BigEndian.Uint16(recvbuf[2:])
-			origts = binary.BigEndian.Uint32(recvbuf[4:])
-			// TODO
-			log.Printf("A: %d: %d samples\n", sn, curts - origts) // 8 KHz
+			msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
+			msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
+			ca <- msg
 		}
 		w.Done()
 	} ()
 
 	go func() {
 		// Run HTTP stats listener
-		http.HandleFunc("/", viewHandler)
+		http.HandleFunc("/json", viewHandlerRobo)
+		http.HandleFunc("/", viewHandlerHuman)
 		log.Printf("HTTP started.\n")
 		http.ListenAndServe(fmt.Sprintf(":%d", listenPort), nil)
 		log.Printf("HTTP stopped.\n")
