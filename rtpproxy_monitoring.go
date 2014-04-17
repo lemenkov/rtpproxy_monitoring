@@ -49,7 +49,19 @@ func init() {
 
 func viewHandlerRobo(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ROBO FROM: %s REQ: %s\n", r.RemoteAddr, r.URL.Path)
-	fmt.Fprintf(w, "%s", "<html lang=\"en\"><head></head><body><a href=\"https://www.google.com/\">HELLO ROBOT</a></body>")
+	var retStr string
+	retStr += "["
+
+	for i := range window.arr {
+		retStr += fmt.Sprintf("{\"unixtime\":%d,\"received\":%d,\"ooo\":%d,\"delay\":%d},",
+		window.arr[i].unixtime,
+		window.arr[i].recv,
+		window.arr[i].ooo,
+		window.arr[i].delay)
+	}
+
+	retStr += "{}]"
+	fmt.Fprintf(w, retStr)
 }
 func viewHandlerHuman(w http.ResponseWriter, r *http.Request) {
 	log.Printf("FROM: %s REQ: %s\n", r.RemoteAddr, r.URL.Path)
