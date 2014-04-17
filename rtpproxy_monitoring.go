@@ -172,6 +172,7 @@ func main() {
 	go func(in1 <-chan RtpMsg, in2 <-chan RtpMsg) {
 		var msg RtpMsg
 		var tm int64
+		currRtpStats.unixtime = time.Now().Unix()
 		for {
 			select {
 			case msg = <-in1:
@@ -182,7 +183,7 @@ func main() {
 					// Push it to the Window
 					window.PushBack(currRtpStats)
 					// ...and clean up
-					currRtpStats.unixtime = tm + int64(histTime)
+					currRtpStats.unixtime += int64(histTime)
 					currRtpStats.recv = 0
 					currRtpStats.ooo = 0
 					currRtpStats.delay = 0
