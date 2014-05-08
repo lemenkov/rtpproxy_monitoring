@@ -1,0 +1,12 @@
+description "RTPproxy monitoring application"
+author      "Peter Lemenkov"
+
+start on runlevel [345] and stopped rc
+stop on runlevel [!2345]
+
+respawn
+
+script
+        . /etc/sysconfig/rtpproxy_monitoring
+        exec /usr/bin/rtpproxy_monitoring -hport=$HPORT -rhost=$RHOST -rport=$RPORT -ptype=$PTYPE -psize=$PSIZE -htime=$HTIME  -hsize=$HSIZE
+end script
