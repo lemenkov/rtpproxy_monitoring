@@ -8,5 +8,5 @@ respawn
 
 script
         . /etc/sysconfig/rtpproxy_monitoring
-        exec /usr/bin/rtpproxy_monitoring -hport=$HPORT -rhost=$RHOST -rport=$RPORT -ptype=$PTYPE -psize=$PSIZE -htime=$HTIME  -hsize=$HSIZE
+        exec /usr/bin/rtpproxy_monitoring -syslog=true -hport=$HPORT -rhost=$RHOST -rport=$RPORT -ptype=$PTYPE -psize=$PSIZE -htime=$HTIME  -hsize=$HSIZE
 end script
