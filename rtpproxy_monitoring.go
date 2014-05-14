@@ -284,8 +284,8 @@ func main() {
 		callid,
 		"192.168.2.200",
 		"20560",
-		strings.Join([]string{tagf, ";1"}, ""),
-		strings.Join([]string{tagt, ";1"}, "")}, " ")
+		strings.Join([]string{tagt, ";1"}, ""),
+		strings.Join([]string{tagf, ";1"}, "")}, " ")
 	log.Printf("Answer: %s\n", answerStr)
 
 	// Send Answer to RTPproxy
