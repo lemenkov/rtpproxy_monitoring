@@ -35,6 +35,8 @@ var payloadSize uint
 var payloadType uint
 var histSize uint
 var histTime uint
+var syslogLog bool
+
 var window *MovingWindow
 var currRtpStats RtpStats
 
@@ -46,6 +48,7 @@ func init() {
 	flag.UintVar(&rtpproxyPort, "rport", 22222, "RTPproxy port")
 	flag.UintVar(&payloadSize, "psize", 160, "RTP payload size (in bytes)")
 	flag.UintVar(&payloadType, "ptype", 8, "RTP payload type")
+	flag.BoolVar(&syslogLog, "syslog", false, "Log to syslog")
 }
 
 func viewHandlerRobo(w http.ResponseWriter, r *http.Request) {
@@ -119,10 +122,12 @@ func makeCon(name string, haddr string, hport string) *net.UDPConn {
 }
 
 func main() {
-	logger, _ := syslog.New(syslog.LOG_INFO, "rtpproxy_monitoring")
-	log.SetOutput(logger)
-
 	flag.Parse()
+
+	if syslogLog {
+		logger, _ := syslog.New(syslog.LOG_INFO, "rtpproxy_monitoring")
+		log.SetOutput(logger)
+	}
 
 	const delay = 20 * time.Millisecond
 
