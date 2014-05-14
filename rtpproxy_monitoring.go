@@ -216,14 +216,16 @@ func main() {
 	defer rtpproxyCon.Close()
 
 	// Create random Cookie, CallID, FromTag, ToTag
-	cookie := getRandStr(8)
+	cookieA := getRandStr(8)
+	cookieO := getRandStr(8)
+	cookieD := getRandStr(8)
 	callid := getRandStr(32)
 	tagf := getRandStr(16)
 	tagt := getRandStr(16)
 
 	// Generate Offer
 	offerStr := strings.Join([]string{
-		cookie,
+		cookieO,
 		"Uc0,8,18,101",
 		callid,
 		"192.168.1.100",
@@ -277,7 +279,7 @@ func main() {
 
 	// Generate Answer
 	answerStr := strings.Join([]string{
-		cookie,
+		cookieA,
 		"Lc0,8,18,101",
 		callid,
 		"192.168.2.200",
@@ -345,7 +347,7 @@ func main() {
 
 	// Generate Delete
 	deleteStr := strings.Join([]string{
-		cookie,
+		cookieD,
 		"D",
 		callid,
 		tagf,
