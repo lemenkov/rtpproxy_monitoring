@@ -35,6 +35,7 @@ var payloadSize uint
 var payloadType uint
 var histSize uint
 var histTime uint
+var reverseTags bool
 var syslogLog bool
 
 var window *MovingWindow
@@ -48,6 +49,7 @@ func init() {
 	flag.UintVar(&rtpproxyPort, "rport", 22222, "RTPproxy port")
 	flag.UintVar(&payloadSize, "psize", 160, "RTP payload size (in bytes)")
 	flag.UintVar(&payloadType, "ptype", 8, "RTP payload type")
+	flag.BoolVar(&reverseTags, "revtags", false, "Reverse tags in Lookup command")
 	flag.BoolVar(&syslogLog, "syslog", false, "Log to syslog")
 }
 
@@ -283,14 +285,26 @@ func main() {
 	} ()
 
 	// Generate Answer
-	answerStr := strings.Join([]string{
-		cookieA,
-		"Lc0,8,18,101",
-		callid,
-		"192.168.2.200",
-		"20560",
-		strings.Join([]string{tagf, ";1"}, ""),
-		strings.Join([]string{tagt, ";1"}, "")}, " ")
+	var answerStr string
+	if reverseTags {
+		answerStr = strings.Join([]string{
+			cookieA,
+			"Lc0,8,18,101",
+			callid,
+			"192.168.2.200",
+			"20560",
+			strings.Join([]string{tagt, ";1"}, ""),
+			strings.Join([]string{tagf, ";1"}, "")}, " ")
+	} else {
+		answerStr = strings.Join([]string{
+			cookieA,
+			"Lc0,8,18,101",
+			callid,
+			"192.168.2.200",
+			"20560",
+			strings.Join([]string{tagf, ";1"}, ""),
+			strings.Join([]string{tagt, ";1"}, "")}, " ")
+	}
 	log.Printf("Answer: %s\n", answerStr)
 
 	// Send Answer to RTPproxy
