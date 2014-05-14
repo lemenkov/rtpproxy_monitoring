@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"flag"
 	"log"
+	"log/syslog"
 	mrand "math/rand"
 	"net"
 	"net/http"
@@ -118,6 +119,9 @@ func makeCon(name string, haddr string, hport string) *net.UDPConn {
 }
 
 func main() {
+	logger, _ := syslog.New(syslog.LOG_INFO, "rtpproxy_monitoring")
+	log.SetOutput(logger)
+
 	flag.Parse()
 
 	const delay = 20 * time.Millisecond
