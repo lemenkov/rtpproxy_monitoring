@@ -87,6 +87,37 @@ func viewHandlerHuman(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<html lang=\"en\"><head></head><body><table>%s</table></head></html>", retStr)
 }
 
+func sender(conn *net.UDPConn, payload []byte, delay time.Duration, w sync.WaitGroup) {
+	var sn uint16
+	var ts uint32
+	sn = 0
+	for {
+		ts = getNtpStamp()
+		binary.BigEndian.PutUint16(payload[2:], sn)
+		binary.BigEndian.PutUint32(payload[4:], ts)
+		_, _ = conn.Write(payload)
+		time.Sleep(delay)
+		if sn == 65535 {
+			sn = 0
+		} else {
+			sn++
+		}
+	}
+	w.Done()
+}
+
+func receiver(conn *net.UDPConn, channel chan RtpMsg, size uint, w sync.WaitGroup) {
+	var recvbuf []byte = make([]byte, size)
+	msg := RtpMsg{}
+	for {
+		_, _ = conn.Read(recvbuf[0:])
+		msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
+		msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
+		channel <- msg
+	}
+	w.Done()
+}
+
 // Number of seconds ellapsed from 1900 to 1970, see RFC 5905
 const ntpEpochOffset = 2208988800
 
@@ -201,10 +232,14 @@ func main() {
 				}
 
 				// Append stats
-				if(msg.sn > currRtpStats.last_sn) {
+				if((msg.sn > currRtpStats.last_sn) || ((msg.sn < 10000) && (currRtpStats.last_sn > 60000))) {
 					currRtpStats.recv++
 					currRtpStats.delay += msg.delay
-					currRtpStats.ooo += (msg.sn - (currRtpStats.last_sn + 1))
+					if ((msg.sn < 10000) && (currRtpStats.last_sn > 60000)) {
+						currRtpStats.ooo += (msg.sn + (65535 - currRtpStats.last_sn))
+					} else {
+						currRtpStats.ooo += (msg.sn - (currRtpStats.last_sn + 1))
+					}
 					currRtpStats.last_sn = msg.sn
 				}
 
@@ -253,35 +288,6 @@ func main() {
 	// Don't forget to close Bob's connection before exit
 	defer bobCon.Close()
 
-	// Run Bob's sender
-	go func() {
-		var sn uint16
-		var ts uint32
-		sn = 0
-		for {
-			ts = getNtpStamp()
-			binary.BigEndian.PutUint16(bpayload[2:], sn)
-			binary.BigEndian.PutUint32(bpayload[4:], ts)
-			_, _ = bobCon.Write(bpayload)
-			time.Sleep(delay)
-			sn++
-		}
-		w.Done()
-	} ()
-
-	// Run Bob's receiver
-	go func() {
-		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
-		msg := RtpMsg{}
-		for {
-			_, _ = bobCon.Read(recvbuf[0:])
-			msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
-			msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
-			cb <- msg
-		}
-		w.Done()
-	} ()
-
 	// Generate Answer
 	var answerStr string
 	if reverseTags {
@@ -320,34 +326,17 @@ func main() {
 	// Don't forget to close Alice's connection before exit
 	defer aliceCon.Close()
 
+	// Run Bob's sender
+	go sender(bobCon, bpayload, delay, w)
+
+	// Run Bob's receiver
+	go receiver(bobCon, cb, rtpHeaderSize + payloadSize, w)
+
 	// Run Alice's sender
-	go func() {
-		var sn uint16
-		var ts uint32
-		sn = 0
-		for {
-			ts = getNtpStamp()
-			binary.BigEndian.PutUint16(apayload[2:], sn)
-			binary.BigEndian.PutUint32(apayload[4:], ts)
-			_, _ = aliceCon.Write(apayload)
-			time.Sleep(delay)
-			sn++
-		}
-		w.Done()
-	} ()
+	go sender(aliceCon, apayload, delay, w)
 
 	// Run Alice's  receiver
-	go func() {
-		var recvbuf []byte = make([]byte, rtpHeaderSize + payloadSize)
-		msg := RtpMsg{}
-		for {
-			_, _ = aliceCon.Read(recvbuf[0:])
-			msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
-			msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
-			ca <- msg
-		}
-		w.Done()
-	} ()
+	go receiver(aliceCon, ca, rtpHeaderSize + payloadSize, w)
 
 	go func() {
 		// Run HTTP stats listener
