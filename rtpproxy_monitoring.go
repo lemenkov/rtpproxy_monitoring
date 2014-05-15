@@ -190,7 +190,7 @@ func main() {
 				// Alice's receiver
 				tm = time.Now().Unix()
 				if (tm >= currRtpStats.unixtime + int64(histTime)){
-					log.Printf("A RESET: %d: %d samples (%d time): %d %d %d %d %d\n", msg.sn, msg.delay, tm, currRtpStats.unixtime, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay, currRtpStats.last_sn) // 8 KHz
+					log.Printf("CURRENT: sn:%d, recv:%d, ooo:%d delay:%d\n", currRtpStats.last_sn, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay) // 8 KHz
 					// Push it to the Window
 					window.PushBack(currRtpStats)
 					// ...and clean up
@@ -200,7 +200,6 @@ func main() {
 					currRtpStats.delay = 0
 				}
 
-				//log.Printf("A: %d: %d samples (%d time)\n", msg.sn, msg.delay, tm) // 8 KHz
 				// Append stats
 				if(msg.sn > currRtpStats.last_sn) {
 					currRtpStats.recv++
@@ -210,8 +209,7 @@ func main() {
 				}
 
 			case msg = <-in2:
-				// Bob's receiver
-				//log.Printf("B: %d: %d samples\n", msg.sn, msg.delay) // 8 KHz
+				// Discarding Bob's receiver data for now - it actually has almost the same parameters
 			}
 		}
 		w.Done()
