@@ -190,6 +190,7 @@ func main() {
 				// Alice's receiver
 				tm = time.Now().Unix()
 				if (tm >= currRtpStats.unixtime + int64(histTime)){
+					log.Printf("A RESET: %d: %d samples (%d time): %d %d %d %d %d\n", msg.sn, msg.delay, tm, currRtpStats.unixtime, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay, currRtpStats.last_sn) // 8 KHz
 					// Push it to the Window
 					window.PushBack(currRtpStats)
 					// ...and clean up
