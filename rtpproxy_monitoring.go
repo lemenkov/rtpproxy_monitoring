@@ -221,7 +221,7 @@ func main() {
 				// Alice's receiver
 				tm = time.Now().Unix()
 				if (tm >= currRtpStats.unixtime + int64(histTime)){
-					log.Printf("CURRENT: sn:%d, recv:%d, ooo:%d delay:%d\n", currRtpStats.last_sn, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay) // 8 KHz
+					log.Printf("stats: sn:%d, recv:%d, ooo:%d delay:%d\n", currRtpStats.last_sn, currRtpStats.recv, currRtpStats.ooo, currRtpStats.delay) // 8 KHz
 					// Push it to the Window
 					window.PushBack(currRtpStats)
 					// ...and clean up
@@ -342,7 +342,7 @@ func main() {
 		// Run HTTP stats listener
 		http.HandleFunc("/json", viewHandlerRobo)
 		http.HandleFunc("/", viewHandlerHuman)
-		log.Printf("HTTP started.\n")
+		log.Printf("HTTP started at 0.0.0.0:%d\n", listenPort)
 		http.ListenAndServe(fmt.Sprintf(":%d", listenPort), nil)
 		log.Printf("HTTP stopped.\n")
 
