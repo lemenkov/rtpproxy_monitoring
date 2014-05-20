@@ -1,0 +1,15 @@
+[Unit]
+Description=RTPproxy monitoring application
+After=network.target
+
+[Service]
+Type=simple
+DeviceAllow=/dev/null rw
+PrivateTmp=true
+NoNewPrivileges=true
+Restart=always
+EnvironmentFile=/etc/sysconfig/rtpproxy_monitoring
+ExecStart=/usr/bin/rtpproxy_monitoring -syslog=false -hport= -rhost=$RHOST -rport=$RPORT -ptype=$PTYPE -psize=$PSIZE -htime=$HTIME  -hsize=$HSIZE
+
+[Install]
+WantedBy=multi-user.target
