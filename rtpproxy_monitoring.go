@@ -170,6 +170,8 @@ func main() {
 
 	const delay = 20 * time.Millisecond
 
+	mrand.Seed(time.Now().UTC().UnixNano())
+
 	var n int
 
 	window = New(int(histSize), 1)
