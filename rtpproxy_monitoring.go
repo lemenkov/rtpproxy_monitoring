@@ -156,7 +156,7 @@ func makeCon(name string, haddr string, hport string) *net.UDPConn {
 		log.Printf("ERR2: udp:%s:%s: %v\n", haddr, hport, err)
 		return nil
 	}
-	log.Printf("Connected %s: [udp:%s:%s]\n", name, haddr, hport)
+	log.Printf("Connected %s: [udp:%s -> udp:%s:%s]\n", name, con.LocalAddr(), haddr, hport)
 	return con
 }
 
