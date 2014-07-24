@@ -106,14 +106,20 @@ func sender(conn *net.UDPConn, payload []byte, delay time.Duration, w sync.WaitG
 	w.Done()
 }
 
-func receiver(conn *net.UDPConn, channel chan RtpMsg, size uint, w sync.WaitGroup) {
+func receiver(conn *net.UDPConn, channel chan RtpMsg, size uint, ssrc uint32, w sync.WaitGroup) {
 	var recvbuf []byte = make([]byte, size)
+	var recvssrc uint32
 	msg := RtpMsg{}
 	for {
 		_, _ = conn.Read(recvbuf[0:])
-		msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
-		msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
-		channel <- msg
+		recvssrc = binary.BigEndian.Uint32(recvbuf[8:])
+		if recvssrc == ssrc {
+			msg.sn = binary.BigEndian.Uint16(recvbuf[2:])
+			msg.delay = getNtpStamp() - binary.BigEndian.Uint32(recvbuf[4:])
+			channel <- msg
+		} else {
+			log.Printf("RECEIVER got a wrong SSRC: %d (should be %d)", recvssrc, ssrc)
+		}
 	}
 	w.Done()
 }
@@ -329,14 +335,14 @@ func main() {
 	// Run Bob's sender
 	go sender(bobCon, bpayload, delay, w)
 
-	// Run Bob's receiver
-	go receiver(bobCon, cb, rtpHeaderSize + payloadSize, w)
+	// Run Bob's receiver (Bob will receive RTP packets with Alice's SSRC)
+	go receiver(bobCon, cb, rtpHeaderSize + payloadSize, uint32(aSSRC), w)
 
 	// Run Alice's sender
 	go sender(aliceCon, apayload, delay, w)
 
-	// Run Alice's  receiver
-	go receiver(aliceCon, ca, rtpHeaderSize + payloadSize, w)
+	// Run Alice's  receiver (Alice will receive RTP packets with Bob's SSRC)
+	go receiver(aliceCon, ca, rtpHeaderSize + payloadSize, uint32(bSSRC), w)
 
 	go func() {
 		// Run HTTP stats listener
