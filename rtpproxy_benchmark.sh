@@ -4,7 +4,7 @@ NUM=$1
 RHOST=127.0.0.1
 RPORT=22222
 
-. /etc/sysconfig/rtpproxy_benchmark
+[ -f /etc/sysconfig/rtpproxy_benchmark ] && . . /etc/sysconfig/rtpproxy_benchmark
 
 for i in `seq 1 ${NUM}`
 do
