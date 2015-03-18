@@ -5,7 +5,7 @@ all: rtpproxy_monitoring
 
 rtpproxy_monitoring:
 	GOPATH=$(GOPATH) GOBIN=$(GOPATH)/bin go get
-	GOPATH=$(GOPATH) GOBIN=$(GOPATH)/bin go build -v -x
+	GOPATH=$(GOPATH) GOBIN=$(GOPATH)/bin go build -v -x -o rtpproxy_monitoring
 
 clean:
 	GOPATH=$(GOPATH) go clean
